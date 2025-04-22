@@ -1,9 +1,9 @@
 # .github/workflows/build_engine_with_internal_streflop_override.yml
 # Workflow to build the BAR engine ('spring'), attempting to force
 # its internal streflop build into software float mode for ARM64 macOS.
-# v23: Uses a CMake toolchain file for configuration.
+# v24: Adds patches for CMake policies and GLAD minimum version. Removes duplicate flags.
 
-name: Build BAR Engine (Toolchain & Internal Streflop Override ARM64)
+name: Build BAR Engine (Fix Policies/GLAD & Toolchain Override ARM64)
 
 # Allow manual triggering from the GitHub Actions UI
 on: workflow_dispatch
@@ -32,8 +32,12 @@ jobs:
         run: |
           # --- Patch Root CMakeLists.txt ---
           ROOT_CMAKE="CMakeLists.txt"
-          echo "--- Applying patch to $ROOT_CMAKE (commenting out add_definitions(-DSTREFLOP_SSE)) ---"
-          sed -i.bak 's|^.*add_definitions(-DSTREFLOP_SSE)|#&|' "$ROOT_CMAKE"
+          echo "--- Applying patch to $ROOT_CMAKE (commenting out add_definitions(-DSTREFLOP_SSE) AND removing OLD policies) ---"
+          # Comment out the line that adds the problematic SSE definition
+          sed -i.bak 's|^.*add_definitions(-DSTREFLOP_SSE)|#&|' "$ROOT_CMAKE" && \
+          # Remove the OLD policy settings
+          sed -i.bak '/cmake_policy(SET CMP0060 OLD)/d' "$ROOT_CMAKE" && \
+          sed -i.bak '/cmake_policy(SET CMP0065 OLD)/d' "$ROOT_CMAKE"
           if [ $? -ne 0 ]; then echo "Root CMake patch failed!"; exit 1; fi
           echo "--- Patched $ROOT_CMAKE ---"
 
@@ -49,10 +53,16 @@ jobs:
           # --- Patch GLAD CMakeLists.txt ---
           GLAD_CMAKE="rts/lib/glad/CMakeLists.txt"
           if [ -f "$GLAD_CMAKE" ]; then
-            echo "--- Applying patch to $GLAD_CMAKE (changing UNIX condition) ---"
-            sed -i.bak 's/if *\( *UNIX AND NOT MINGW *\)/if (UNIX AND NOT APPLE AND NOT MINGW)/' "$GLAD_CMAKE"
+            echo "--- Applying patch to $GLAD_CMAKE (changing UNIX condition AND minimum version) ---"
+            # Change 'if (UNIX AND NOT MINGW)' to 'if (UNIX AND NOT APPLE AND NOT MINGW)'
+            sed -i.bak 's/if *\( *UNIX AND NOT MINGW *\)/if (UNIX AND NOT APPLE AND NOT MINGW)/' "$GLAD_CMAKE" && \
+            # Change minimum required version
+            sed -i.bak 's/cmake_minimum_required(VERSION 3.0)/cmake_minimum_required(VERSION 3.5)/' "$GLAD_CMAKE"
             if [ $? -ne 0 ]; then echo "GLAD CMake patch failed!"; exit 1; fi
             echo "--- Patched $GLAD_CMAKE ---"
+            echo "--- Content AFTER patch: $GLAD_CMAKE ---"
+            cat "$GLAD_CMAKE"
+            echo "--- End GLAD patch debug ---"
           else
             echo "WARNING: $GLAD_CMAKE not found, skipping GLAD patch."
           fi
@@ -67,6 +77,7 @@ jobs:
 
       - name: Configure CMake for Engine using Toolchain File
         # Use the toolchain file instead of command-line flags for platform/compiler settings
+        # Removed CMAKE_C_FLAGS and CMAKE_CXX_FLAGS from here - rely on toolchain file
         run: |
           cmake -S ${{ github.workspace }} -B ./build \
             -DCMAKE_TOOLCHAIN_FILE=${{ github.workspace }}/.github/cmake/macos_arm64_softfloat.cmake \
