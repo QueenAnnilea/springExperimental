@@ -1,9 +1,9 @@
 # .github/workflows/build_engine_with_internal_streflop_override.yml
 # Workflow to build the BAR engine ('spring'), attempting to force
 # its internal streflop build into software float mode for ARM64 macOS.
-# v15: Add patch for root CMakeLists to prevent SSE define, disable GLAD GLX.
+# v16: Deletes glad_glx.c source file instead of using CMake flag. Keeps patches.
 
-name: Build BAR Engine (Fix Streflop/GLAD & Internal Override ARM64)
+name: Build BAR Engine (Delete GLAD GLX & Internal Streflop Override ARM64)
 
 # Allow manual triggering from the GitHub Actions UI
 on: workflow_dispatch
@@ -28,7 +28,7 @@ jobs:
           brew install sdl2 devil minizip libogg libvorbis fontconfig
         shell: bash
 
-      - name: Patch Root CMakeLists.txt to prevent STREFLOP_SSE # <-- ADDED STEP
+      - name: Patch Root CMakeLists.txt to prevent STREFLOP_SSE
         run: |
           ROOT_CMAKE="CMakeLists.txt"
           echo "--- Content BEFORE patch: $ROOT_CMAKE ---"
@@ -45,7 +45,7 @@ jobs:
           echo "--- End root patch debug ---"
         shell: bash
 
-      - name: Patch Legacy Build CMakeLists.txt to disable X11 # <-- KEPT PREVIOUS PATCH
+      - name: Patch Legacy Build CMakeLists.txt to disable X11
         run: |
           TARGET_FILE="rts/builds/legacy/CMakeLists.txt"
           echo "--- Content BEFORE patch: $TARGET_FILE ---"
@@ -64,6 +64,18 @@ jobs:
           echo "--- End legacy patch debug ---"
         shell: bash
 
+      - name: Delete GLAD GLX source file # <-- NEW STEP
+        run: |
+          GLAD_GLX_FILE="rts/lib/glad/glad_glx.c"
+          if [ -f "$GLAD_GLX_FILE" ]; then
+            echo "Deleting $GLAD_GLX_FILE..."
+            rm "$GLAD_GLX_FILE"
+            echo "Deleted."
+          else
+            echo "$GLAD_GLX_FILE not found, skipping delete."
+          fi
+        shell: bash
+
       - name: List files in workspace (DEBUG)
         run: ls -la ${{ github.workspace }}
         shell: bash
@@ -73,13 +85,11 @@ jobs:
 
       - name: Configure CMake for Engine
         # Attempt to enable streflop soft mode globally via CMAKE flags
-        # Also disable GLAD GLX generation
         run: |
           cmake -S ${{ github.workspace }} -B ./build \
             -DCMAKE_BUILD_TYPE=Release \
             -DCMAKE_OSX_ARCHITECTURES=arm64 \
             -DENABLE_STREFLOP=ON \ # Keep streflop enabled
-            -DGLAD_GLX=OFF \ # <-- Attempt to disable GLX generation for GLAD
             # Pass ONLY the SOFT flag for streflop (SSE flag should be prevented by patch)
             -DCMAKE_C_FLAGS="-DSTREFLOP_SOFT" \
             -DCMAKE_CXX_FLAGS="-DSTREFLOP_SOFT"
