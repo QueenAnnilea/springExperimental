@@ -1,15 +1,16 @@
 # .github/workflows/build_engine_with_internal_streflop_override.yml
 # Workflow to build the BAR engine ('spring'), attempting to force
 # its internal streflop build into software float mode for ARM64 macOS.
+# v6: Simplified flag override - only add SOFT, don't undefine SSE.
 
-name: Build BAR Engine (Internal Streflop Override ARM64)
+name: Build BAR Engine (Simplified Internal Streflop Override ARM64)
 
 # Allow manual triggering from the GitHub Actions UI
 on: workflow_dispatch
 
 jobs:
   build:
-    name: Build engine with internal streflop override (arm64)
+    name: Build engine with simplified internal streflop override (arm64)
     # Use the latest standard macOS runner
     runs-on: macos-latest
 
@@ -22,29 +23,26 @@ jobs:
         #   submodules: 'recursive'
 
       - name: List files in workspace (DEBUG)
-        # See what the top-level directory looks like after checkout
         run: ls -la ${{ github.workspace }}
         shell: bash
-
-      # REMOVED: Step to download pre-built streflop artifact is no longer needed.
 
       - name: Create build directory
         run: mkdir build
 
       - name: Configure CMake for Engine
-        # Attempt to override streflop build mode globally via CMAKE flags
-        # This tries to add DSTREFLOP_SOFT and undefine DSTREFLOP_SSE
-        # which is normally added by the main CMakeLists.txt.
+        # Attempt to enable streflop soft mode globally via CMAKE flags
+        # This only ADDS DSTREFLOP_SOFT. It does NOT attempt to remove
+        # DSTREFLOP_SSE, which is added later by the main CMakeLists.txt.
+        # This relies on streflop's internal logic potentially checking SOFT first.
         run: |
           cmake -S ${{ github.workspace }} -B ./build \
             -DCMAKE_BUILD_TYPE=Release \
             -DCMAKE_OSX_ARCHITECTURES=arm64 \
             -DENABLE_STREFLOP=ON \ # Keep streflop enabled
-            # Pass flags hoping to override the default DSTREFLOP_SSE
-            -DCMAKE_C_FLAGS="-DSTREFLOP_SOFT -U DSTREFLOP_SSE" \
-            -DCMAKE_CXX_FLAGS="-DSTREFLOP_SOFT -U DSTREFLOP_SSE"
+            # Pass ONLY the SOFT flag
+            -DCMAKE_C_FLAGS="-DSTREFLOP_SOFT" \
+            -DCMAKE_CXX_FLAGS="-DSTREFLOP_SOFT"
             # Add any other necessary CMake options for the engine build
-            # e.g., -DWITH_HEADLESS=ON if needed, check engine build docs
         shell: bash
 
       - name: Build BAR Engine
