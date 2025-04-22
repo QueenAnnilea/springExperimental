@@ -1,9 +1,9 @@
 # .github/workflows/build_engine_with_internal_streflop_override.yml
 # Workflow to build the BAR engine ('spring'), attempting to force
 # its internal streflop build into software float mode for ARM64 macOS.
-# v12: Patches rts/builds/legacy/CMakeLists.txt to disable X11 on macOS.
+# v13: Patches rts/builds/legacy/CMakeLists.txt by commenting out X11 lines.
 
-name: Build BAR Engine (Patch X11 & Internal Streflop Override ARM64)
+name: Build BAR Engine (Comment X11 & Internal Streflop Override ARM64)
 
 # Allow manual triggering from the GitHub Actions UI
 on: workflow_dispatch
@@ -28,14 +28,24 @@ jobs:
           brew install sdl2 devil minizip libogg libvorbis fontconfig
         shell: bash
 
-      - name: Patch CMakeLists.txt to disable X11 on macOS # <-- ADDED STEP
-        # Use sed to replace 'if (UNIX)' with 'if (UNIX AND NOT APPLE)'
-        # in the specific file causing the X11 error.
+      - name: Patch CMakeLists.txt to disable X11 on macOS # <-- MODIFIED STEP
+        # Use sed to comment out the lines causing X11 errors
+        # Adjust line numbers (47, 48, 49) if necessary based on the actual file.
         run: |
-          sed -i.bak 's/if (UNIX)/if (UNIX AND NOT APPLE)/g' rts/builds/legacy/CMakeLists.txt
-          echo "--- Patched rts/builds/legacy/CMakeLists.txt: ---"
-          cat rts/builds/legacy/CMakeLists.txt
-          echo "--- End Patched File ---"
+          TARGET_FILE="rts/builds/legacy/CMakeLists.txt"
+          echo "--- Content BEFORE patch: $TARGET_FILE ---"
+          cat "$TARGET_FILE"
+          echo "--- Applying patch (commenting out X11 lines 47-49) ---"
+          sed -i.bak '47s/^/#/' "$TARGET_FILE" && \
+          sed -i.bak '48s/^/#/' "$TARGET_FILE" && \
+          sed -i.bak '49s/^/#/' "$TARGET_FILE"
+          if [ $? -ne 0 ]; then
+            echo "sed command failed!"
+            exit 1
+          fi
+          echo "--- Content AFTER patch: $TARGET_FILE ---"
+          cat "$TARGET_FILE"
+          echo "--- End patch debug ---"
         shell: bash
 
       - name: List files in workspace (DEBUG)
