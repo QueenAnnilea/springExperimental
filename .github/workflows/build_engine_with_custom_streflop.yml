@@ -1,16 +1,16 @@
 # .github/workflows/build_engine_with_internal_streflop_override.yml
 # Workflow to build the BAR engine ('spring'), attempting to force
 # its internal streflop build into software float mode for ARM64 macOS.
-# v6: Simplified flag override - only add SOFT, don't undefine SSE.
+# v7: Added steps to install SDL2 and DevIL dependencies via Homebrew.
 
-name: Build BAR Engine (Simplified Internal Streflop Override ARM64)
+name: Build BAR Engine (Install Deps & Internal Streflop Override ARM64)
 
 # Allow manual triggering from the GitHub Actions UI
 on: workflow_dispatch
 
 jobs:
   build:
-    name: Build engine with simplified internal streflop override (arm64)
+    name: Build engine with internal streflop override (arm64)
     # Use the latest standard macOS runner
     runs-on: macos-latest
 
@@ -21,6 +21,12 @@ jobs:
         # (Check .gitmodules file in the repo)
         # with:
         #   submodules: 'recursive'
+
+      - name: Install Dependencies (Homebrew) # <-- ADDED STEP
+        run: |
+          brew update
+          brew install sdl2 devil
+        shell: bash
 
       - name: List files in workspace (DEBUG)
         run: ls -la ${{ github.workspace }}
@@ -43,6 +49,10 @@ jobs:
             -DCMAKE_C_FLAGS="-DSTREFLOP_SOFT" \
             -DCMAKE_CXX_FLAGS="-DSTREFLOP_SOFT"
             # Add any other necessary CMake options for the engine build
+            # Homebrew installs might require setting CMAKE_PREFIX_PATH
+            # -DCMAKE_PREFIX_PATH="/opt/homebrew/opt/sdl2;/opt/homebrew/opt/devil" # Example for ARM runners
+        env: # Pass Homebrew prefix path if needed, especially for ARM runners
+           CMAKE_PREFIX_PATH: /opt/homebrew/opt/sdl2:/opt/homebrew/opt/devil # Common path on ARM runners
         shell: bash
 
       - name: Build BAR Engine
