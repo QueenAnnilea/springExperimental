@@ -1,9 +1,9 @@
 # .github/workflows/build_engine_with_internal_streflop_override.yml
 # Workflow to build the BAR engine ('spring'), attempting to force
 # its internal streflop build into software float mode for ARM64 macOS.
-# v26: Improved sed pattern for patching gflags minimum version.
+# v27: Simpler sed pattern for patching gflags minimum version.
 
-name: Build BAR Engine (Improved gflags Patch & Toolchain Override ARM64)
+name: Build BAR Engine (Simpler gflags Patch & Toolchain Override ARM64)
 
 # Allow manual triggering from the GitHub Actions UI
 on: workflow_dispatch
@@ -60,12 +60,12 @@ jobs:
             echo "WARNING: $GLAD_CMAKE not found, skipping GLAD patch."
           fi
 
-          # --- Patch gflags CMakeLists.txt --- # <-- IMPROVED GFLAGS PATCH
+          # --- Patch gflags CMakeLists.txt --- # <-- SIMPLER GFLAGS PATCH
           GFLAGS_CMAKE="rts/lib/gflags/CMakeLists.txt"
           if [ -f "$GFLAGS_CMAKE" ]; then
-            echo "--- Applying patch to $GFLAGS_CMAKE (updating minimum version - improved sed) ---"
-            # Improved pattern: matches 'cmake_minimum_required', captures 'VERSION', replaces version number, keeps potential extra args like FATAL_ERROR
-            sed -i.bak 's/\(cmake_minimum_required *([[:space:]]*VERSION[[:space:]]*\)[0-9]\+\.[0-9]\+\(\.[0-9]\+\)*\(.*\))/\13.5\3/' "$GFLAGS_CMAKE"
+            echo "--- Applying patch to $GFLAGS_CMAKE (updating minimum version - simpler sed) ---"
+            # Simpler pattern: Replace the whole known line
+            sed -i.bak 's/cmake_minimum_required *(VERSION 2.8.12 FATAL_ERROR)/cmake_minimum_required(VERSION 3.5)/' "$GFLAGS_CMAKE"
             if [ $? -ne 0 ]; then echo "gflags CMake patch failed!"; exit 1; fi
             echo "--- Patched $GFLAGS_CMAKE ---"
             echo "--- Content AFTER patch: $GFLAGS_CMAKE ---" # Add debug output
