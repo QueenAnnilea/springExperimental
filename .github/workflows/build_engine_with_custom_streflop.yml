@@ -1,9 +1,9 @@
 # .github/workflows/build_engine_with_internal_streflop_override.yml
 # Workflow to build the BAR engine ('spring'), attempting to force
 # its internal streflop build into software float mode for ARM64 macOS.
-# v17: Patches multiple CMakeLists.txt files (root, legacy, glad)
+# v18: Reverts GLAD patch, re-adds -DGLAD_GLX=OFF flag.
 
-name: Build BAR Engine (Multi-Patch & Internal Streflop Override ARM64)
+name: Build BAR Engine (Revert GLAD Patch & Internal Streflop Override ARM64)
 
 # Allow manual triggering from the GitHub Actions UI
 on: workflow_dispatch
@@ -28,9 +28,8 @@ jobs:
           brew install sdl2 devil minizip libogg libvorbis fontconfig
         shell: bash
 
-      - name: Patch CMake Files # <-- COMBINED PATCH STEP
+      - name: Patch Root CMakeLists.txt to prevent STREFLOP_SSE
         run: |
-          # --- Patch Root CMakeLists.txt ---
           ROOT_CMAKE="CMakeLists.txt"
           echo "--- Content BEFORE patch: $ROOT_CMAKE ---"
           cat "$ROOT_CMAKE"
@@ -40,38 +39,24 @@ jobs:
           echo "--- Content AFTER patch: $ROOT_CMAKE ---"
           cat "$ROOT_CMAKE"
           echo "--- End root patch debug ---"
-
-          # --- Patch Legacy Build CMakeLists.txt ---
-          LEGACY_CMAKE="rts/builds/legacy/CMakeLists.txt"
-          echo "--- Content BEFORE patch: $LEGACY_CMAKE ---"
-          cat "$LEGACY_CMAKE"
-          echo "--- Applying patch (commenting out X11 lines) ---"
-          sed -i.bak 's|^.*find_package(X11 REQUIRED)|#&|' "$LEGACY_CMAKE" && \
-          sed -i.bak 's|^.*target_link_libraries(Game PRIVATE X11::Xcursor)|#&|' "$LEGACY_CMAKE" && \
-          sed -i.bak 's|^.*list(APPEND engineLibraries ${X11_Xcursor_LIB} ${X11_X11_LIB})|#&|' "$LEGACY_CMAKE"
-          if [ $? -ne 0 ]; then echo "Legacy CMake patch failed!"; exit 1; fi
-          echo "--- Content AFTER patch: $LEGACY_CMAKE ---"
-          cat "$LEGACY_CMAKE"
-          echo "--- End legacy patch debug ---"
-
-          # --- Patch GLAD CMakeLists.txt (Best Guess) ---
-          GLAD_CMAKE="rts/lib/glad/CMakeLists.txt"
-          # Check if file exists before attempting patch
-          if [ -f "$GLAD_CMAKE" ]; then
-            echo "--- Content BEFORE patch: $GLAD_CMAKE ---"
-            cat "$GLAD_CMAKE"
-            echo "--- Applying patch (commenting out glad_glx.c source line - GUESSING!) ---"
-            # This sed command GUESSES that glad_glx.c is listed alone or first on a line.
-            # It might need adjustment based on the actual file content.
-            sed -i.bak 's|^.*glad_glx.c.*|#&|' "$GLAD_CMAKE"
-            if [ $? -ne 0 ]; then echo "GLAD CMake patch failed!"; exit 1; fi
-            echo "--- Content AFTER patch: $GLAD_CMAKE ---"
-            cat "$GLAD_CMAKE"
-            echo "--- End GLAD patch debug ---"
-          else
-            echo "WARNING: $GLAD_CMAKE not found, skipping GLAD patch."
-          fi
         shell: bash
+
+      - name: Patch Legacy Build CMakeLists.txt to disable X11
+        run: |
+          TARGET_FILE="rts/builds/legacy/CMakeLists.txt"
+          echo "--- Content BEFORE patch: $TARGET_FILE ---"
+          cat "$TARGET_FILE"
+          echo "--- Applying patch (commenting out X11 lines) ---"
+          sed -i.bak 's|^.*find_package(X11 REQUIRED)|#&|' "$TARGET_FILE" && \
+          sed -i.bak 's|^.*target_link_libraries(Game PRIVATE X11::Xcursor)|#&|' "$TARGET_FILE" && \
+          sed -i.bak 's|^.*list(APPEND engineLibraries ${X11_Xcursor_LIB} ${X11_X11_LIB})|#&|' "$TARGET_FILE"
+          if [ $? -ne 0 ]; then echo "Legacy CMake patch failed!"; exit 1; fi
+          echo "--- Content AFTER patch: $TARGET_FILE ---"
+          cat "$TARGET_FILE"
+          echo "--- End legacy patch debug ---"
+        shell: bash
+
+      # REMOVED: Step that patched/deleted GLAD files
 
       - name: List files in workspace (DEBUG)
         run: ls -la ${{ github.workspace }}
@@ -82,11 +67,13 @@ jobs:
 
       - name: Configure CMake for Engine
         # Attempt to enable streflop soft mode globally via CMAKE flags
+        # Also disable GLAD GLX generation using the CMake flag
         run: |
           cmake -S ${{ github.workspace }} -B ./build \
             -DCMAKE_BUILD_TYPE=Release \
             -DCMAKE_OSX_ARCHITECTURES=arm64 \
             -DENABLE_STREFLOP=ON \ # Keep streflop enabled
+            -DGLAD_GLX=OFF \ # <-- Re-added attempt to disable GLX generation for GLAD
             # Pass ONLY the SOFT flag for streflop (SSE flag should be prevented by patch)
             -DCMAKE_C_FLAGS="-DSTREFLOP_SOFT" \
             -DCMAKE_CXX_FLAGS="-DSTREFLOP_SOFT"
