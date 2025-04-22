@@ -1,71 +1,57 @@
-# .github/workflows/build_engine_with_custom_streflop.yml
-# Workflow to build the BAR engine ('spring') using a custom-built streflop library
-# v2: Added debug step to list files after checkout
+# .github/workflows/build_engine_with_internal_streflop_override.yml
+# Workflow to build the BAR engine ('spring'), attempting to force
+# its internal streflop build into software float mode for ARM64 macOS.
 
-name: Build BAR Engine (Custom Streflop ARM64)
+name: Build BAR Engine (Internal Streflop Override ARM64)
 
-# Allow manual triggering, potentially adding inputs later to specify artifact source
+# Allow manual triggering from the GitHub Actions UI
 on: workflow_dispatch
 
 jobs:
   build:
-    name: Build engine with custom streflop (arm64)
+    name: Build engine with internal streflop override (arm64)
+    # Use the latest standard macOS runner
     runs-on: macos-latest
 
     steps:
       - name: Checkout engine code
         uses: actions/checkout@v4
-        # Might need submodules if the engine uses them
+        # Ensure submodules are checked out if the engine uses them
+        # (Check .gitmodules file in the repo)
         # with:
         #   submodules: 'recursive'
 
-      - name: List files in workspace (DEBUG) # <-- ADDED DEBUG STEP
+      - name: List files in workspace (DEBUG)
         # See what the top-level directory looks like after checkout
         run: ls -la ${{ github.workspace }}
         shell: bash
 
-      - name: Download custom streflop artifact
-        # NOTE: This step is currently designed assuming we pre-build streflop.
-        # If we modify the engine build to handle streflop internally, this step will be removed.
-        uses: actions/download-artifact@v4
-        with:
-          name: streflop-soft-arm64-lib # Must match the artifact name from the streflop workflow
-          # This assumes the artifact is from the *latest* completed run of the streflop workflow
-          # on the default branch. For more control, you might need to specify a run_id.
-          path: ./streflop_custom # Download to this directory
-
-      - name: List downloaded files (for debugging)
-        run: ls -R ./streflop_custom
+      # REMOVED: Step to download pre-built streflop artifact is no longer needed.
 
       - name: Create build directory
         run: mkdir build
 
       - name: Configure CMake for Engine
-        # This step configures the engine build. Crucial assumptions:
-        # 1. Target ARM64 macOS.
-        # 2. We need to tell the engine's CMake *exactly* how to find and use our custom library.
-        #    The variables below (-DUSE_SYSTEM_STREFLOP, DSTREFLOP_INCLUDE_DIR, DSTREFLOP_LIBRARY)
-        #    are *guesses* and MUST be verified by inspecting the engine's CMakeLists.txt.
-        #    It might use CMAKE_PREFIX_PATH or other methods instead.
-        # 3. Assumes headers are in ./streflop_custom/include and lib in ./streflop_custom/lib
-        # NOTE: This step will need significant changes if we modify the engine build
-        # to handle streflop internally instead of downloading an artifact.
+        # Attempt to override streflop build mode globally via CMAKE flags
+        # This tries to add DSTREFLOP_SOFT and undefine DSTREFLOP_SSE
+        # which is normally added by the main CMakeLists.txt.
         run: |
-          cd build
-          cmake .. \
+          cmake -S ${{ github.workspace }} -B ./build \
             -DCMAKE_BUILD_TYPE=Release \
             -DCMAKE_OSX_ARCHITECTURES=arm64 \
-            -DUSE_SYSTEM_STREFLOP=ON \ # Guess: Tell CMake not to build/find its own
-            -DSTREFLOP_INCLUDE_DIR=../streflop_custom/include \ # Guess: Path to headers
-            -DSTREFLOP_LIBRARY=../streflop_custom/lib/libstreflop.a # Guess: Path to static library
+            -DENABLE_STREFLOP=ON \ # Keep streflop enabled
+            # Pass flags hoping to override the default DSTREFLOP_SSE
+            -DCMAKE_C_FLAGS="-DSTREFLOP_SOFT -U DSTREFLOP_SSE" \
+            -DCMAKE_CXX_FLAGS="-DSTREFLOP_SOFT -U DSTREFLOP_SSE"
             # Add any other necessary CMake options for the engine build
+            # e.g., -DWITH_HEADLESS=ON if needed, check engine build docs
         shell: bash
 
       - name: Build BAR Engine
+        # Build using the specified build directory
         run: |
-          cd build
-          make -j$(sysctl -n hw.ncpu) # Use available cores
+          cmake --build ./build --config Release -- -j$(sysctl -n hw.ncpu)
         shell: bash
 
       # No artifact upload needed here unless we want to save the built engine
-      # The success/failure of the 'make' step determines the workflow outcome
+      # The success/failure of the build step determines the workflow outcome
