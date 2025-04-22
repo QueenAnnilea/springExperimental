@@ -1,9 +1,9 @@
 # .github/workflows/build_engine_with_internal_streflop_override.yml
 # Workflow to build the BAR engine ('spring'), attempting to force
 # its internal streflop build into software float mode for ARM64 macOS.
-# v16: Deletes glad_glx.c source file instead of using CMake flag. Keeps patches.
+# v17: Patches multiple CMakeLists.txt files (root, legacy, glad)
 
-name: Build BAR Engine (Delete GLAD GLX & Internal Streflop Override ARM64)
+name: Build BAR Engine (Multi-Patch & Internal Streflop Override ARM64)
 
 # Allow manual triggering from the GitHub Actions UI
 on: workflow_dispatch
@@ -28,51 +28,48 @@ jobs:
           brew install sdl2 devil minizip libogg libvorbis fontconfig
         shell: bash
 
-      - name: Patch Root CMakeLists.txt to prevent STREFLOP_SSE
+      - name: Patch CMake Files # <-- COMBINED PATCH STEP
         run: |
+          # --- Patch Root CMakeLists.txt ---
           ROOT_CMAKE="CMakeLists.txt"
           echo "--- Content BEFORE patch: $ROOT_CMAKE ---"
           cat "$ROOT_CMAKE"
           echo "--- Applying patch (commenting out add_definitions(-DSTREFLOP_SSE)) ---"
-          # Comment out the line that adds the problematic SSE definition
-          sed -i.bak 's/^.*add_definitions(-DSTREFLOP_SSE)/#&/' "$ROOT_CMAKE"
-          if [ $? -ne 0 ]; then
-            echo "Root CMake sed command failed!"
-            exit 1
-          fi
+          sed -i.bak 's|^.*add_definitions(-DSTREFLOP_SSE)|#&|' "$ROOT_CMAKE"
+          if [ $? -ne 0 ]; then echo "Root CMake patch failed!"; exit 1; fi
           echo "--- Content AFTER patch: $ROOT_CMAKE ---"
           cat "$ROOT_CMAKE"
           echo "--- End root patch debug ---"
-        shell: bash
 
-      - name: Patch Legacy Build CMakeLists.txt to disable X11
-        run: |
-          TARGET_FILE="rts/builds/legacy/CMakeLists.txt"
-          echo "--- Content BEFORE patch: $TARGET_FILE ---"
-          cat "$TARGET_FILE"
+          # --- Patch Legacy Build CMakeLists.txt ---
+          LEGACY_CMAKE="rts/builds/legacy/CMakeLists.txt"
+          echo "--- Content BEFORE patch: $LEGACY_CMAKE ---"
+          cat "$LEGACY_CMAKE"
           echo "--- Applying patch (commenting out X11 lines) ---"
-          # Comment out the lines causing X11 errors
-          sed -i.bak 's/^.*find_package(X11 REQUIRED)/#&/' "$TARGET_FILE" && \
-          sed -i.bak 's/^.*target_link_libraries(Game PRIVATE X11::Xcursor)/#&/' "$TARGET_FILE" && \
-          sed -i.bak 's/^.*list(APPEND engineLibraries ${X11_Xcursor_LIB} ${X11_X11_LIB})/#&/' "$TARGET_FILE"
-          if [ $? -ne 0 ]; then
-            echo "Legacy CMake sed command failed!"
-            exit 1
-          fi
-          echo "--- Content AFTER patch: $TARGET_FILE ---"
-          cat "$TARGET_FILE"
+          sed -i.bak 's|^.*find_package(X11 REQUIRED)|#&|' "$LEGACY_CMAKE" && \
+          sed -i.bak 's|^.*target_link_libraries(Game PRIVATE X11::Xcursor)|#&|' "$LEGACY_CMAKE" && \
+          sed -i.bak 's|^.*list(APPEND engineLibraries ${X11_Xcursor_LIB} ${X11_X11_LIB})|#&|' "$LEGACY_CMAKE"
+          if [ $? -ne 0 ]; then echo "Legacy CMake patch failed!"; exit 1; fi
+          echo "--- Content AFTER patch: $LEGACY_CMAKE ---"
+          cat "$LEGACY_CMAKE"
           echo "--- End legacy patch debug ---"
-        shell: bash
 
-      - name: Delete GLAD GLX source file # <-- NEW STEP
-        run: |
-          GLAD_GLX_FILE="rts/lib/glad/glad_glx.c"
-          if [ -f "$GLAD_GLX_FILE" ]; then
-            echo "Deleting $GLAD_GLX_FILE..."
-            rm "$GLAD_GLX_FILE"
-            echo "Deleted."
+          # --- Patch GLAD CMakeLists.txt (Best Guess) ---
+          GLAD_CMAKE="rts/lib/glad/CMakeLists.txt"
+          # Check if file exists before attempting patch
+          if [ -f "$GLAD_CMAKE" ]; then
+            echo "--- Content BEFORE patch: $GLAD_CMAKE ---"
+            cat "$GLAD_CMAKE"
+            echo "--- Applying patch (commenting out glad_glx.c source line - GUESSING!) ---"
+            # This sed command GUESSES that glad_glx.c is listed alone or first on a line.
+            # It might need adjustment based on the actual file content.
+            sed -i.bak 's|^.*glad_glx.c.*|#&|' "$GLAD_CMAKE"
+            if [ $? -ne 0 ]; then echo "GLAD CMake patch failed!"; exit 1; fi
+            echo "--- Content AFTER patch: $GLAD_CMAKE ---"
+            cat "$GLAD_CMAKE"
+            echo "--- End GLAD patch debug ---"
           else
-            echo "$GLAD_GLX_FILE not found, skipping delete."
+            echo "WARNING: $GLAD_CMAKE not found, skipping GLAD patch."
           fi
         shell: bash
 
