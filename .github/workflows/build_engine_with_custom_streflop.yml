@@ -1,9 +1,9 @@
 # .github/workflows/build_engine_with_internal_streflop_override.yml
 # Workflow to build the BAR engine ('spring'), attempting to force
 # its internal streflop build into software float mode for ARM64 macOS.
-# v11: Added X11 libraries via Homebrew as a workaround for CMake config error.
+# v12: Patches rts/builds/legacy/CMakeLists.txt to disable X11 on macOS.
 
-name: Build BAR Engine (Install X11 & Internal Streflop Override ARM64)
+name: Build BAR Engine (Patch X11 & Internal Streflop Override ARM64)
 
 # Allow manual triggering from the GitHub Actions UI
 on: workflow_dispatch
@@ -24,9 +24,18 @@ jobs:
       - name: Install Dependencies (Homebrew)
         run: |
           brew update
-          # Install core deps + audio + X11 libs (workaround)
-          brew install sdl2 devil minizip libogg libvorbis fontconfig \
-                       libx11 libxext libxcursor libxfixes libxi libxrender libxrandr
+          # Install core deps + audio (X11 libs no longer needed)
+          brew install sdl2 devil minizip libogg libvorbis fontconfig
+        shell: bash
+
+      - name: Patch CMakeLists.txt to disable X11 on macOS # <-- ADDED STEP
+        # Use sed to replace 'if (UNIX)' with 'if (UNIX AND NOT APPLE)'
+        # in the specific file causing the X11 error.
+        run: |
+          sed -i.bak 's/if (UNIX)/if (UNIX AND NOT APPLE)/g' rts/builds/legacy/CMakeLists.txt
+          echo "--- Patched rts/builds/legacy/CMakeLists.txt: ---"
+          cat rts/builds/legacy/CMakeLists.txt
+          echo "--- End Patched File ---"
         shell: bash
 
       - name: List files in workspace (DEBUG)
@@ -48,10 +57,8 @@ jobs:
             -DCMAKE_CXX_FLAGS="-DSTREFLOP_SOFT"
             # Add any other necessary CMake options for the engine build
         env:
-           # Help CMake find Homebrew packages, including X11 ones
-           CMAKE_PREFIX_PATH: /opt/homebrew/opt/sdl2:/opt/homebrew/opt/devil:/opt/homebrew/opt/minizip:/opt/homebrew/opt/libogg:/opt/homebrew/opt/libvorbis:/opt/homebrew/opt/fontconfig:/opt/homebrew/opt/libx11:/opt/homebrew/opt/libxext:/opt/homebrew/opt/libxcursor # Add more X11 paths if needed
-           # Might also need PKG_CONFIG_PATH for some X11 libs
-           # PKG_CONFIG_PATH: /opt/homebrew/opt/libx11/lib/pkgconfig:/opt/homebrew/opt/libxcursor/lib/pkgconfig # Example
+           # Help CMake find Homebrew packages (X11 paths removed)
+           CMAKE_PREFIX_PATH: /opt/homebrew/opt/sdl2:/opt/homebrew/opt/devil:/opt/homebrew/opt/minizip:/opt/homebrew/opt/libogg:/opt/homebrew/opt/libvorbis:/opt/homebrew/opt/fontconfig
         shell: bash
 
       - name: Build BAR Engine
@@ -62,3 +69,4 @@ jobs:
 
       # No artifact upload needed here unless we want to save the built engine
       # The success/failure of the build step determines the workflow outcome
+
