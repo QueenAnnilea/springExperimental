@@ -1,9 +1,9 @@
 # .github/workflows/build_engine_with_internal_streflop_override.yml
 # Workflow to build the BAR engine ('spring'), attempting to force
 # its internal streflop build into software float mode for ARM64 macOS.
-# v8: Added 'submodules: recursive' to checkout step.
+# v9: Added libogg and libvorbis dependencies via Homebrew.
 
-name: Build BAR Engine (Checkout Submodules & Internal Streflop Override ARM64)
+name: Build BAR Engine (Install Audio Deps & Internal Streflop Override ARM64)
 
 # Allow manual triggering from the GitHub Actions UI
 on: workflow_dispatch
@@ -19,12 +19,13 @@ jobs:
         uses: actions/checkout@v4
         # Ensure submodules are checked out recursively
         with:
-          submodules: 'recursive' # <-- ADDED THIS LINE
+          submodules: 'recursive'
 
       - name: Install Dependencies (Homebrew)
         run: |
           brew update
-          brew install sdl2 devil minizip # Added minizip just in case it's not a submodule
+          # Install SDL2, DevIL, MiniZip, Ogg, Vorbis
+          brew install sdl2 devil minizip libogg libvorbis
         shell: bash
 
       - name: List files in workspace (DEBUG)
@@ -47,7 +48,7 @@ jobs:
             # Add any other necessary CMake options for the engine build
         env:
            # Help CMake find Homebrew packages
-           CMAKE_PREFIX_PATH: /opt/homebrew/opt/sdl2:/opt/homebrew/opt/devil:/opt/homebrew/opt/minizip # Added minizip path
+           CMAKE_PREFIX_PATH: /opt/homebrew/opt/sdl2:/opt/homebrew/opt/devil:/opt/homebrew/opt/minizip:/opt/homebrew/opt/libogg:/opt/homebrew/opt/libvorbis # Added Ogg/Vorbis paths
         shell: bash
 
       - name: Build BAR Engine
