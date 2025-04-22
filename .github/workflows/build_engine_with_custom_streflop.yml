@@ -1,9 +1,9 @@
 # .github/workflows/build_engine_with_internal_streflop_override.yml
 # Workflow to build the BAR engine ('spring'), attempting to force
 # its internal streflop build into software float mode for ARM64 macOS.
-# v9: Added libogg and libvorbis dependencies via Homebrew.
+# v10: Attempt to disable X11 dependency.
 
-name: Build BAR Engine (Install Audio Deps & Internal Streflop Override ARM64)
+name: Build BAR Engine (Disable X11 & Internal Streflop Override ARM64)
 
 # Allow manual triggering from the GitHub Actions UI
 on: workflow_dispatch
@@ -25,7 +25,7 @@ jobs:
         run: |
           brew update
           # Install SDL2, DevIL, MiniZip, Ogg, Vorbis
-          brew install sdl2 devil minizip libogg libvorbis
+          brew install sdl2 devil minizip libogg libvorbis fontconfig # Added fontconfig as it was found later
         shell: bash
 
       - name: List files in workspace (DEBUG)
@@ -37,18 +37,20 @@ jobs:
 
       - name: Configure CMake for Engine
         # Attempt to enable streflop soft mode globally via CMAKE flags
+        # Also attempt to disable X11 dependency
         run: |
           cmake -S ${{ github.workspace }} -B ./build \
             -DCMAKE_BUILD_TYPE=Release \
             -DCMAKE_OSX_ARCHITECTURES=arm64 \
             -DENABLE_STREFLOP=ON \ # Keep streflop enabled
-            # Pass ONLY the SOFT flag
+            -DWITH_X11=OFF \ # <-- Attempt to disable X11 features
+            # Pass ONLY the SOFT flag for streflop
             -DCMAKE_C_FLAGS="-DSTREFLOP_SOFT" \
             -DCMAKE_CXX_FLAGS="-DSTREFLOP_SOFT"
             # Add any other necessary CMake options for the engine build
         env:
            # Help CMake find Homebrew packages
-           CMAKE_PREFIX_PATH: /opt/homebrew/opt/sdl2:/opt/homebrew/opt/devil:/opt/homebrew/opt/minizip:/opt/homebrew/opt/libogg:/opt/homebrew/opt/libvorbis # Added Ogg/Vorbis paths
+           CMAKE_PREFIX_PATH: /opt/homebrew/opt/sdl2:/opt/homebrew/opt/devil:/opt/homebrew/opt/minizip:/opt/homebrew/opt/libogg:/opt/homebrew/opt/libvorbis:/opt/homebrew/opt/fontconfig # Added fontconfig path
         shell: bash
 
       - name: Build BAR Engine
