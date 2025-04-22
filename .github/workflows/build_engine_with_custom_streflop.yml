@@ -1,9 +1,9 @@
 # .github/workflows/build_engine_with_internal_streflop_override.yml
 # Workflow to build the BAR engine ('spring'), attempting to force
 # its internal streflop build into software float mode for ARM64 macOS.
-# v7: Added steps to install SDL2 and DevIL dependencies via Homebrew.
+# v8: Added 'submodules: recursive' to checkout step.
 
-name: Build BAR Engine (Install Deps & Internal Streflop Override ARM64)
+name: Build BAR Engine (Checkout Submodules & Internal Streflop Override ARM64)
 
 # Allow manual triggering from the GitHub Actions UI
 on: workflow_dispatch
@@ -17,15 +17,14 @@ jobs:
     steps:
       - name: Checkout engine code
         uses: actions/checkout@v4
-        # Ensure submodules are checked out if the engine uses them
-        # (Check .gitmodules file in the repo)
-        # with:
-        #   submodules: 'recursive'
+        # Ensure submodules are checked out recursively
+        with:
+          submodules: 'recursive' # <-- ADDED THIS LINE
 
-      - name: Install Dependencies (Homebrew) # <-- ADDED STEP
+      - name: Install Dependencies (Homebrew)
         run: |
           brew update
-          brew install sdl2 devil
+          brew install sdl2 devil minizip # Added minizip just in case it's not a submodule
         shell: bash
 
       - name: List files in workspace (DEBUG)
@@ -37,9 +36,6 @@ jobs:
 
       - name: Configure CMake for Engine
         # Attempt to enable streflop soft mode globally via CMAKE flags
-        # This only ADDS DSTREFLOP_SOFT. It does NOT attempt to remove
-        # DSTREFLOP_SSE, which is added later by the main CMakeLists.txt.
-        # This relies on streflop's internal logic potentially checking SOFT first.
         run: |
           cmake -S ${{ github.workspace }} -B ./build \
             -DCMAKE_BUILD_TYPE=Release \
@@ -49,10 +45,9 @@ jobs:
             -DCMAKE_C_FLAGS="-DSTREFLOP_SOFT" \
             -DCMAKE_CXX_FLAGS="-DSTREFLOP_SOFT"
             # Add any other necessary CMake options for the engine build
-            # Homebrew installs might require setting CMAKE_PREFIX_PATH
-            # -DCMAKE_PREFIX_PATH="/opt/homebrew/opt/sdl2;/opt/homebrew/opt/devil" # Example for ARM runners
-        env: # Pass Homebrew prefix path if needed, especially for ARM runners
-           CMAKE_PREFIX_PATH: /opt/homebrew/opt/sdl2:/opt/homebrew/opt/devil # Common path on ARM runners
+        env:
+           # Help CMake find Homebrew packages
+           CMAKE_PREFIX_PATH: /opt/homebrew/opt/sdl2:/opt/homebrew/opt/devil:/opt/homebrew/opt/minizip # Added minizip path
         shell: bash
 
       - name: Build BAR Engine
