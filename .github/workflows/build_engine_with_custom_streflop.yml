@@ -52,8 +52,9 @@ jobs:
           GLAD_CMAKE="rts/lib/glad/CMakeLists.txt"
           if [ -f "$GLAD_CMAKE" ]; then
             echo "--- Applying patch to $GLAD_CMAKE (changing UNIX condition AND minimum version) ---"
+            # Use slightly more robust sed patterns
             sed -i.bak 's/if *\( *UNIX AND NOT MINGW *\)/if (UNIX AND NOT APPLE AND NOT MINGW)/' "$GLAD_CMAKE" && \
-            sed -i.bak 's/cmake_minimum_required(VERSION 3.0)/cmake_minimum_required(VERSION 3.5)/' "$GLAD_CMAKE"
+            sed -i.bak 's/cmake_minimum_required( *VERSION *3\.0 *)/cmake_minimum_required(VERSION 3.5)/' "$GLAD_CMAKE"
             if [ $? -ne 0 ]; then echo "GLAD CMake patch failed!"; exit 1; fi
             echo "--- Patched $GLAD_CMAKE ---"
           else
@@ -63,10 +64,9 @@ jobs:
           # --- Patch gflags CMakeLists.txt --- # <-- ADDED GFLAGS PATCH
           GFLAGS_CMAKE="rts/lib/gflags/CMakeLists.txt"
           if [ -f "$GFLAGS_CMAKE" ]; then
-            echo "--- Applying patch to $GFLAGS_CMAKE (updating minimum version) ---"
-            # Use a generic pattern to find and replace the version, assuming it's near line 73
-            # A more robust sed might be needed if line number changes or format differs
-            sed -i.bak 's/cmake_minimum_required(VERSION [0-9]\+\.[0-9]\+)/cmake_minimum_required(VERSION 3.5)/' "$GFLAGS_CMAKE"
+            echo "--- Applying patch to $GFLAGS_CMAKE (updating minimum version - revised sed) ---"
+            # Use a more specific pattern for the version line, allowing for whitespace
+            sed -i.bak 's/cmake_minimum_required( *VERSION *[0-9]\+\.[0-9]\+ *)/cmake_minimum_required(VERSION 3.5)/' "$GFLAGS_CMAKE"
             if [ $? -ne 0 ]; then echo "gflags CMake patch failed!"; exit 1; fi
             echo "--- Patched $GFLAGS_CMAKE ---"
             echo "--- Content AFTER patch: $GFLAGS_CMAKE ---" # Add debug output
