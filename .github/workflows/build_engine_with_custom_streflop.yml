@@ -1,1 +1,62 @@
+# .github/workflows/build_engine_with_custom_streflop.yml
+# Workflow to build the BAR engine ('spring') using a custom-built streflop library
+
+name: Build BAR Engine (Custom Streflop ARM64)
+
+# Allow manual triggering, potentially adding inputs later to specify artifact source
+on: workflow_dispatch
+
+jobs:
+  build:
+    name: Build engine with custom streflop (arm64)
+    runs-on: macos-latest
+
+    steps:
+      - name: Checkout engine code
+        uses: actions/checkout@v4
+        # Might need submodules if the engine uses them
+        # with:
+        #   submodules: 'recursive'
+
+      - name: Download custom streflop artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: streflop-soft-arm64-lib # Must match the artifact name from the streflop workflow
+          # This assumes the artifact is from the *latest* completed run of the streflop workflow
+          # on the default branch. For more control, you might need to specify a run_id.
+          path: ./streflop_custom # Download to this directory
+
+      - name: List downloaded files (for debugging)
+        run: ls -R ./streflop_custom
+
+      - name: Create build directory
+        run: mkdir build
+
+      - name: Configure CMake for Engine
+        # This step configures the engine build. Crucial assumptions:
+        # 1. Target ARM64 macOS.
+        # 2. We need to tell the engine's CMake *exactly* how to find and use our custom library.
+        #    The variables below (-DUSE_SYSTEM_STREFLOP, DSTREFLOP_INCLUDE_DIR, DSTREFLOP_LIBRARY)
+        #    are *guesses* and MUST be verified by inspecting the engine's CMakeLists.txt.
+        #    It might use CMAKE_PREFIX_PATH or other methods instead.
+        # 3. Assumes headers are in ./streflop_custom/include and lib in ./streflop_custom/lib
+        run: |
+          cd build
+          cmake .. \
+            -DCMAKE_BUILD_TYPE=Release \
+            -DCMAKE_OSX_ARCHITECTURES=arm64 \
+            -DUSE_SYSTEM_STREFLOP=ON \ # Guess: Tell CMake not to build/find its own
+            -DSTREFLOP_INCLUDE_DIR=../streflop_custom/include \ # Guess: Path to headers
+            -DSTREFLOP_LIBRARY=../streflop_custom/lib/libstreflop.a # Guess: Path to static library
+            # Add any other necessary CMake options for the engine build
+        shell: bash
+
+      - name: Build BAR Engine
+        run: |
+          cd build
+          make -j$(sysctl -n hw.ncpu) # Use available cores
+        shell: bash
+
+      # No artifact upload needed here unless we want to save the built engine
+      # The success/failure of the 'make' step determines the workflow outcome
 
