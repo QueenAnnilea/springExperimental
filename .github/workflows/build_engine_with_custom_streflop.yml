@@ -1,9 +1,9 @@
 # .github/workflows/build_engine_with_internal_streflop_override.yml
 # Workflow to build the BAR engine ('spring'), attempting to force
 # its internal streflop build into software float mode for ARM64 macOS.
-# v13: Patches rts/builds/legacy/CMakeLists.txt by commenting out X11 lines.
+# v14: Fixes shell syntax error in CMake command line construction.
 
-name: Build BAR Engine (Comment X11 & Internal Streflop Override ARM64)
+name: Build BAR Engine (Fix Syntax & Internal Streflop Override ARM64)
 
 # Allow manual triggering from the GitHub Actions UI
 on: workflow_dispatch
@@ -24,21 +24,21 @@ jobs:
       - name: Install Dependencies (Homebrew)
         run: |
           brew update
-          # Install core deps + audio (X11 libs no longer needed)
+          # Install core deps + audio
           brew install sdl2 devil minizip libogg libvorbis fontconfig
         shell: bash
 
-      - name: Patch CMakeLists.txt to disable X11 on macOS # <-- MODIFIED STEP
+      - name: Patch CMakeLists.txt to disable X11 on macOS
         # Use sed to comment out the lines causing X11 errors
-        # Adjust line numbers (47, 48, 49) if necessary based on the actual file.
         run: |
           TARGET_FILE="rts/builds/legacy/CMakeLists.txt"
           echo "--- Content BEFORE patch: $TARGET_FILE ---"
           cat "$TARGET_FILE"
           echo "--- Applying patch (commenting out X11 lines 47-49) ---"
-          sed -i.bak '47s/^/#/' "$TARGET_FILE" && \
-          sed -i.bak '48s/^/#/' "$TARGET_FILE" && \
-          sed -i.bak '49s/^/#/' "$TARGET_FILE"
+          # Use specific line content matching to be safer than line numbers
+          sed -i.bak 's/^.*find_package(X11 REQUIRED)/#&/' "$TARGET_FILE" && \
+          sed -i.bak 's/^.*target_link_libraries(Game PRIVATE X11::Xcursor)/#&/' "$TARGET_FILE" && \
+          sed -i.bak 's/^.*list(APPEND engineLibraries ${X11_Xcursor_LIB} ${X11_X11_LIB})/#&/' "$TARGET_FILE"
           if [ $? -ne 0 ]; then
             echo "sed command failed!"
             exit 1
@@ -56,18 +56,17 @@ jobs:
         run: mkdir build
 
       - name: Configure CMake for Engine
-        # Attempt to enable streflop soft mode globally via CMAKE flags
+        # Corrected syntax: put command on fewer lines, use single quotes for flags
         run: |
           cmake -S ${{ github.workspace }} -B ./build \
             -DCMAKE_BUILD_TYPE=Release \
             -DCMAKE_OSX_ARCHITECTURES=arm64 \
-            -DENABLE_STREFLOP=ON \ # Keep streflop enabled
-            # Pass ONLY the SOFT flag for streflop
-            -DCMAKE_C_FLAGS="-DSTREFLOP_SOFT" \
-            -DCMAKE_CXX_FLAGS="-DSTREFLOP_SOFT"
-            # Add any other necessary CMake options for the engine build
+            -DENABLE_STREFLOP=ON \
+            -DCMAKE_C_FLAGS='-DSTREFLOP_SOFT' \
+            -DCMAKE_CXX_FLAGS='-DSTREFLOP_SOFT'
+            # Add any other necessary CMake options for the engine build here
         env:
-           # Help CMake find Homebrew packages (X11 paths removed)
+           # Help CMake find Homebrew packages
            CMAKE_PREFIX_PATH: /opt/homebrew/opt/sdl2:/opt/homebrew/opt/devil:/opt/homebrew/opt/minizip:/opt/homebrew/opt/libogg:/opt/homebrew/opt/libvorbis:/opt/homebrew/opt/fontconfig
         shell: bash
 
